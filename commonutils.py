@@ -11,39 +11,45 @@ def verbose_print(*args):
 		pass	# do nothing
 
 
-def output_result(results, output_type):
+def output_result(results, output_format):
 	import json
-
-	if output_type == "stdout":
+	if output_format == "raw":
 		print json.dumps(results)
-	elif output_type == "pretty":
+	elif output_format == "pretty":
 		print json.dumps(results, indent=4, sort_keys=True, ensure_ascii=False, encoding="utf-8")
-	elif output_type == "json":
+	elif output_format == "json":
 		with open("output.json", 'w+') as output_file:
 			json.dump(results, output_file)
-	elif output_type == "csv":
+	elif output_format == "csv":
 		#TODO : write to CSV file
 		pass
 	else:
-		assert False, "unhandled output type : " + output_type
+		assert False, "unhandled output format : " + output_format
 
-
-def parse_arguments(available_commands, short_non_arg_options_dict, long_non_arg_options_dict, short_arg_options_dict, long_arg_options_dict):
+def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_arg_options):
 	import getopt, sys
-
-	# 0A. Check correct number of arguments
-	if len(short_non_arg_options_dict) != len(long_non_arg_options_dict):
-		assert False, "non-arg options number mismatch : " + str(short_non_arg_options_dict) + str(long_non_arg_options_dict)
-	if len(short_arg_options_dict) != len(long_arg_options_dict):
-		assert False, "arg options number mismatch : " + str(short_arg_options_dict) + str(long_arg_options_dict)
-	# 0B. Build the options string and dict for getopt
-	short_options_string = "".join(short_non_arg_options_dict) + "".join(map(lambda x: x + ":", short_arg_options_dict))
-	long_options_dict = long_non_arg_options_dict + map(lambda x: x + "=", long_arg_options_dict)
+	# 0A. Check if each provided option has short and long version
+	for acceptable_non_arg_option in acceptable_non_arg_options:
+		if len(acceptable_non_arg_options) != 2:
+			assert False, "non-arg options number mismatch : " + str(acceptable_arg_option)
+	for acceptable_arg_option_dict in acceptable_arg_options:
+		acceptable_arg_option = acceptable_arg_option_dict["option_name"]
+		if len(acceptable_arg_option) != 2:
+			assert False, "arg options number mismatch : " + str(acceptable_arg_option)
 	
+	# 0B. Build the options string and dict for getopt
+	acceptable_short_non_arg_options = map(lambda x : x[0], acceptable_non_arg_options)
+	acceptable_short_arg_options = map(lambda x: x["option_name"][0], acceptable_arg_options)
+	acceptable_short_options_string = "".join(acceptable_short_non_arg_options) + "".join(map(lambda x: x + ":", acceptable_short_arg_options))
+	print acceptable_short_options_string
+	acceptable_long_non_arg_options = map(lambda x : x[1], acceptable_non_arg_options)
+	acceptable_long_arg_options = map(lambda x: x["option_name"][1], acceptable_arg_options)
+	acceptable_long_options_dict = acceptable_long_non_arg_options + map(lambda x: x + "=", acceptable_long_arg_options)
+	print acceptable_long_options_dict
 	input_data = []
 	try:
 		# 1. Get the options and standard (non-optional ) arguments
-		opts, non_opts_args = getopt.gnu_getopt(sys.argv[1:], short_options_string, long_options_dict)
+		opts, non_opts_args = getopt.gnu_getopt(sys.argv[1:], acceptable_short_options_string, acceptable_long_options_dict)
 		# 2. Parse the  ommand (take the first non-optional argument as command)
 		if len(non_opts_args) != 0:
 			command = non_opts_args.pop(0)
@@ -56,21 +62,29 @@ def parse_arguments(available_commands, short_non_arg_options_dict, long_non_arg
 		options_dict = {}
 		for option, arg in opts:
 			# 3A. Non-arg options
-			if option in map(lambda x: "-" + x, short_non_arg_options_dict):
-				option_name = long_non_arg_options_dict[short_non_arg_options_dict.index(option[1:])] #map(lambda x: "-" + x, short_non_arg_options_dict)
+			if option in map(lambda x: "-" + x, acceptable_short_non_arg_options):
+				option_name = acceptable_long_non_arg_options[acceptable_short_non_arg_options.index(option[1:])] #map(lambda x: "-" + x, short_non_arg_options_dict)
 				options_dict[option_name] = True
-			elif option in map(lambda x: "--" + x, long_non_arg_options_dict):
+			elif option in map(lambda x: "--" + x, acceptable_long_non_arg_options):
 				option_name = option[2:]
 				options_dict[option_name] = True
 			# 3B. Arg options
-			elif option in map(lambda x: "-" + x, short_arg_options_dict):
-				option_name = long_arg_options_dict[short_arg_options_dict.index(option[1:])]
-				options_dict[option_name] = arg
-				#TODO : check if option value is valid
-			elif option in map(lambda x: "--" + x, long_arg_options_dict):
+			elif option in map(lambda x: "-" + x, acceptable_short_arg_options):
+				option_name = acceptable_long_arg_options[acceptable_short_arg_options.index(option[1:])]
+				matching_acceptable_arg_option_dict = [ acceptable_arg_option_dict for acceptable_arg_option_dict in acceptable_arg_options if acceptable_arg_option_dict["option_name"][1] == option_name ][0]
+				acceptable_arg_option_values = matching_acceptable_arg_option_dict["acceptable_values"]
+				if arg in acceptable_arg_option_values:
+					options_dict[option_name] = arg
+				else:
+					assert False, "unhandled option value : " + arg + " for option " + option_name
+			elif option in map(lambda x: "--" + x, acceptable_long_arg_options):
 				option_name = option[2:]
-				options_dict[option_name] = arg
-				#TODO : check if option value is valid
+				matching_acceptable_arg_option_dict = [ acceptable_arg_option_dict for acceptable_arg_option_dict in acceptable_arg_options if acceptable_arg_option_dict["option_name"][1] == option_name ][0]
+				acceptable_arg_option_values = matching_acceptable_arg_option_dict["acceptable_values"]
+				if arg in acceptable_arg_option_values:
+					options_dict[option_name] = arg
+				else:
+					assert False, "unhandled option value : " + arg + " for option " + option_name
 			else:
 				assert False, "unhandled option : " + option
 		# Set verbose
@@ -85,7 +99,6 @@ def parse_arguments(available_commands, short_non_arg_options_dict, long_non_arg
 
 def get_input_data(input_format, command_line_args):
 	import sys
-
 	# 0. Get input from stdin or command line arguments (input type = stdin or cli)
 	input_data = []
 	if len(command_line_args) == 0:
@@ -112,6 +125,8 @@ def get_input_data(input_format, command_line_args):
 	elif input_format == "csv":
 		#TODO : read CSV file
 		pass
+	else:
+		assert False, "unhandled input format : " + input_format
 	return input_data
 
 def get_last_line(file):
