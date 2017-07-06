@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# General purpose functions
+
 verbose = False
 def verbose_print(*args):
 	if verbose :
@@ -9,6 +11,72 @@ def verbose_print(*args):
 		print
 	else:
 		pass	# do nothing
+
+def get_array_dim(array):
+	if type(array) == list:
+		# array of arrays
+		try:
+			if type(array[0]) == list: #if type() == str does not True for unicode strings
+				#TODO : recursively
+				return 2
+			# array of objects
+			else:
+				return 1
+				#TODO : check data type for each item
+		except IndexError as err:
+			assert False, "array is empty : " + str(array)
+	else:
+		assert False, "object is not an array but of type : " + str(type(array))
+
+def super_map(array, function, *args):
+	resulting_array = []
+	for item in array:
+		# Apply function to the item, passing optional arguments
+		result = function(item, *args)
+		resulting_array.append(result)
+	return resulting_array
+
+def super_submap(two_dim_array, function, *args):
+	resulting_two_dim_array = []
+	for array in two_dim_array:
+		resulting_array = super_map(array, function, *args)
+		resulting_two_dim_array.append(resulting_array)
+	return resulting_two_dim_array
+
+def get_item(iterable, index, default=None):
+	if iterable:
+		try:
+			return iterable[index]
+		except IndexError as err:
+			assert False, "index " + str(index) + " out of bounds of iterable : " + str(iterable) + " of length : " + str(len(iterable))
+		except KeyError as err:
+			assert False, "key " + str(index) + " could not be found in iterable : " + str(iterable)
+		except TypeError as err:
+			assert False, "iterable : " + str(iterable) + " of type : " + str(type(iterable)) + " is not hashable, with key [" + str(index) + "] of type : " + str(type(index))
+	return default
+
+def get_subitem(iterable, index, subindex, default=None):
+	item = get_item(iterable, index)
+	subitem = get_item(item, subindex, default)
+	return subitem
+
+def append_string(input_string, string2):
+	return input_string + string2
+
+def prepend_string(input_string, string2):
+	return string2 + input_string
+
+def get_array_type(array):
+	try:
+		array_type = type(array[0])
+	except IndexError as err:
+		assert False, "array is empty"
+	for item in array:
+		if type(item) != array_type:
+			assert False, "array is not uniform : " + str(array)
+	return array_type
+
+# Input/output functions
 
 def output_results(results, output_format):
 	import json
@@ -51,13 +119,13 @@ def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_a
 			assert False, "arg options number mismatch : " + str(acceptable_arg_option)
 	
 	# 0B. Build the options string and dict for getopt
-	acceptable_short_non_arg_options = map(lambda x : x[0], acceptable_non_arg_options)
-	acceptable_short_arg_options = map(lambda x: x["option_name"][0], acceptable_arg_options)
-	acceptable_short_options_string = "".join(acceptable_short_non_arg_options) + "".join(map(lambda x: x + ":", acceptable_short_arg_options))
+	acceptable_short_non_arg_options = super_map(acceptable_non_arg_options, get_item, 0)
+	acceptable_short_arg_options = super_map(acceptable_arg_options, get_subitem, "option_name", 0)
+	acceptable_short_options_string = "".join(acceptable_short_non_arg_options) + "".join(super_map(acceptable_short_arg_options, append_string, ":"))
 	verbose_print("long options are : '" + acceptable_short_options_string + "'")
-	acceptable_long_non_arg_options = map(lambda x : x[1], acceptable_non_arg_options)
-	acceptable_long_arg_options = map(lambda x: x["option_name"][1], acceptable_arg_options)
-	acceptable_long_options_dict = acceptable_long_non_arg_options + map(lambda x: x + "=", acceptable_long_arg_options)
+	acceptable_long_non_arg_options = super_map(acceptable_non_arg_options, get_item, 1)
+	acceptable_long_arg_options = super_map(acceptable_arg_options, get_subitem, "option_name", 1)
+	acceptable_long_options_dict = acceptable_long_non_arg_options + super_map(acceptable_long_arg_options, append_string, "=")
 	verbose_print("long options are : '" + " ". join(acceptable_long_options_dict) + "'")
 	input_data = []
 	try:
@@ -75,14 +143,14 @@ def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_a
 		options_dict = {}
 		for option, arg in opts:
 			# 3A. Non-arg options
-			if option in map(lambda x: "-" + x, acceptable_short_non_arg_options):
+			if option in super_map(acceptable_short_non_arg_options, prepend_string, "-"):
 				option_name = acceptable_long_non_arg_options[acceptable_short_non_arg_options.index(option[1:])] #map(lambda x: "-" + x, short_non_arg_options_dict)
 				options_dict[option_name] = True
-			elif option in map(lambda x: "--" + x, acceptable_long_non_arg_options):
+			elif option in super_map(acceptable_long_non_arg_options, prepend_string, "--"):
 				option_name = option[2:]
 				options_dict[option_name] = True
 			# 3B. Arg options
-			elif option in map(lambda x: "-" + x, acceptable_short_arg_options):
+			elif option in super_map(acceptable_short_arg_options, prepend_string, "-"):
 				option_name = acceptable_long_arg_options[acceptable_short_arg_options.index(option[1:])]
 				matching_acceptable_arg_option_dict = [ acceptable_arg_option_dict for acceptable_arg_option_dict in acceptable_arg_options if acceptable_arg_option_dict["option_name"][1] == option_name ][0]
 				acceptable_arg_option_values = matching_acceptable_arg_option_dict["acceptable_values"]
@@ -90,7 +158,7 @@ def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_a
 					options_dict[option_name] = arg
 				else:
 					assert False, "unhandled option value : " + arg + " for option " + option_name
-			elif option in map(lambda x: "--" + x, acceptable_long_arg_options):
+			elif option in super_map(acceptable_long_arg_options, prepend_string, "--"):
 				option_name = option[2:]
 				matching_acceptable_arg_option_dict = [ acceptable_arg_option_dict for acceptable_arg_option_dict in acceptable_arg_options if acceptable_arg_option_dict["option_name"][1] == option_name ][0]
 				acceptable_arg_option_values = matching_acceptable_arg_option_dict["acceptable_values"]
@@ -165,7 +233,6 @@ def get_dict_data(data_dicts, input_data_group_name_key, input_data_group_array_
 	data_keys = []
 	data_blocks = []
 	for data_dict in data_dicts:
-		print data_dict
 		try:
 			data_keys.append(data_dict[input_data_group_name_key])
 			data_blocks_part = data_dict[input_data_group_array_key]
@@ -181,32 +248,15 @@ def get_dict_data(data_dicts, input_data_group_name_key, input_data_group_array_
 	verbose_print("data_blocks are : " + str(data_blocks))
 	return [data_blocks, data_keys]
 
-def get_array_dim(array):
-	if type(array) == list:
-		# array of arrays
-		try:
-			if type(array[0]) == list: #if type() == str does not True for unicode strings
-				#TODO : recursively
-				return 2
-			# array of objects
-			else:
-				return 1
-				#TODO : check data type for each item
-		except IndexError as err:
-			assert False, "array is empty : " + str(array)
-	else:
-		assert False, "object is not an array but of type : " + str(type(array))
+def get_last_line(file):
+	last_line = file.readline()
+	for line in file:
+		print(line) # necessary has script can be piped with -v option set
+		last_line = line
+	return last_line
 
-def get_array_type(array):
-	try:
-		array_type = type(array[0])
-	except IndexError as err:
-		assert False, "array is empty"
-	for item in array:
-		if type(item) != array_type:
-			assert False, "array is not uniform : " + str(array)
-	return array_type
-					
+# Data and file handling functions
+
 def load_data(data_array, input_format):
 	if input_format in ["url", "html", "inline_html"]:
 		array_dim = get_array_dim(data_array)
@@ -237,13 +287,6 @@ def load_html_data(html_thing, input_format):
 	else:
 		assert False, "unhandled input format : " + input_format
 	return html_data
-
-def get_last_line(file):
-	last_line = file.readline()
-	for line in file:
-		print(line) # necessary has script can be piped with -v option set
-		last_line = line
-	return last_line
 
 def encode_html(html):
 	from shellescape import quote
