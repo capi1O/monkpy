@@ -10,7 +10,7 @@ def verbose_print(*args):
 	else:
 		pass	# do nothing
 
-def output_result(results, output_format):
+def output_results(results, output_format):
 	import json
 	if output_format == "raw":
 		print json.dumps(results)
@@ -24,6 +24,20 @@ def output_result(results, output_format):
 		pass
 	else:
 		assert False, "unhandled output format : " + output_format
+
+def output_grouped_results(group_keys, grouped_results, output_format):
+	# check
+	if len(group_keys) != len(grouped_results):
+		assert False, "mismatch number for grouped output : "  + str(len(grouped_results)) + " group results for " + str(len(group_keys)) + " keys"
+	# make dict
+	result_dicts = []
+	for index, results in enumerate(grouped_results):
+		result_dict = { 
+			"key" : group_keys[index],
+			"results" : results
+		}
+		result_dicts.append(result_dict)
+	output_results(result_dicts, output_format)
 
 def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_arg_options):
 	import getopt, sys
@@ -40,11 +54,11 @@ def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_a
 	acceptable_short_non_arg_options = map(lambda x : x[0], acceptable_non_arg_options)
 	acceptable_short_arg_options = map(lambda x: x["option_name"][0], acceptable_arg_options)
 	acceptable_short_options_string = "".join(acceptable_short_non_arg_options) + "".join(map(lambda x: x + ":", acceptable_short_arg_options))
-	print acceptable_short_options_string
+	verbose_print("long options are : '" + acceptable_short_options_string + "'")
 	acceptable_long_non_arg_options = map(lambda x : x[1], acceptable_non_arg_options)
 	acceptable_long_arg_options = map(lambda x: x["option_name"][1], acceptable_arg_options)
 	acceptable_long_options_dict = acceptable_long_non_arg_options + map(lambda x: x + "=", acceptable_long_arg_options)
-	print acceptable_long_options_dict
+	verbose_print("long options are : '" + " ". join(acceptable_long_options_dict) + "'")
 	input_data = []
 	try:
 		# 1. Get the options and standard (non-optional ) arguments
@@ -96,87 +110,117 @@ def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_a
 		# usage()
 		sys.exit(2)
 
-def get_input_data(input_type, input_format, command_line_args):
+def get_input_data(input_type, input_format, command_line_args, input_data_group_name_key, input_data_group_array_key):
 	import sys
 	# 0. Get input from stdin or command line arguments (input type = stdin or cli)
 	input_data = []
-	data_is_organized = False
 	if len(command_line_args) == 0:
 		# get only last line to avoid log messages
 		input_data.append(get_last_line(sys.stdin))
 	else:
 		input_data = command_line_args
-	# 1. 
-	# inline string : load it straight
-	if  input_type == "inline":
-		input_data = [load_html_data(data, input_format) for data in input_data]
-	# JSON strings : decode
-	elif input_type == "inline_json":
-		if len(input_data) == 1:
-			input_data = decode_json(input_data[0])
-			data_is_array = not check_data_organization(input_data[0], input_format)
-			if data_is_array:
-				input_data = [load_html_data(data, input_format) for data in input_data]
-			else:
-				assert False, "JSON data is organized, not implemented yet : " + str(input_data)
-				data_is_organized = True
+	# 1. Arrange data in a 1 or 2 dim array
+	# dimension 1 = array of data blocks, dimension 2 = array of arrays of data blocks or array of dicts with arrays of data blocks)
+	data_blocks = []
+	data_keys = []
+	# 1.A. Array of data blocks
+	if input_type in ["inline"]:
+		data_blocks = input_data
+		verbose_print("input data is " + str(data_blocks))
+	# 1.B Array of arrays of data blocks or array of dicts with arrays of data blocks
+	elif input_type in ["inline_json", "json", "inline-csv", "csv"]:
+		if len(input_data) != 1:
+			assert False, "script accept only one file"
 		else:
-			assert False, "script accept only one JSON"	
-	# JSON filenames : read JSON files
-	elif input_type == "json":
-		# input_data = map(read_json(), input_data)
-		if len(input_data) == 1:
-			input_data = read_json(input_data[0])
-			data_is_array = not check_data_organization(input_data[0], input_format)
-			if data_is_array:
-				input_data = [load_html_data(data, input_format) for data in input_data]
-			else:
-				assert False, "JSON data is organized, not implemented yet : " + str(input_data)
-				data_is_organized = True
-		else:
-			assert False, "script accept only one JSON file, " + str(len(input_data)) + " provided"
-	# CSV strings
-	elif input_type == "inline_csv":
-		if len(input_data) == 1:
-			#TODO : decode
-			pass
-		else:
-			assert False, "script accept only one CSV"
-	# CSV filenames
-	elif input_type == "csv":
-		if len(input_data) == 1:
-			#TODO : read CSV file
-			pass
-		else:
-			assert False, "script accept only one CSV file"
+			# 1.B.A. JSON data
+			if input_type.endswith("json"):
+				if input_type == "inline_json":
+					json_data = decode_json(input_data[0])
+				elif input_type == "json":
+					json_data = read_json(input_data[0])
+				else:
+					assert False, "unknown json format : " + input_type
+				if type(json_data) == list:
+					# 1.B.A.A JSON array of data blocks
+					if isinstance(json_data[0], basestring): #if type() == str does not True for unicode strings
+						data_blocks = json_data
+					# 1.B.A.B. JSON array of dicts of data blocks
+					elif type(json_data[0]) == dict:
+						data_blocks, data_keys = get_dict_data(json_data, input_data_group_name_key, input_data_group_array_key, False)
+					else:
+						assert False, "unknown organization for data : " + str(json_data[0])
+				else:
+					assert False, "JSON input type must be array, " + str(json_data)
+			# B. CSV data
+			elif input_format.endswith("csv"):
+				#TODO
+				pass
 	else:
 		assert False, "unhandled input type : " + input_type
-	return input_data, data_is_organized
+	# 2. Load Data depending on type (only HTML supported)
+	loaded_data = load_data(data_blocks, input_format)
+	return [loaded_data, data_keys]
 
-def check_data_organization(organized_input_data, input_format):
-	# A. JSON organized data
-	if input_format.endswith("json"):
-		# Sanity check
-		if type(organized_input_data) == list:
-			# A.A JSON array, each item is either inline raw HTML, URL or HTML filename
-			if type(organized_input_data[0]) == str:
-				return False
-			# A.B. JSON array, each item is a dictionnary
-			elif type(organized_input_data[0]) == dict:
-				return True
-			# key1 = group name 
-			# key2 = array of items : raw HTML, URL or HTML filename
+def get_dict_data(data_dicts, input_data_group_name_key, input_data_group_array_key, merge):
+	data_keys = []
+	data_blocks = []
+	for data_dict in data_dicts:
+		print data_dict
+		try:
+			data_keys.append(data_dict[input_data_group_name_key])
+			data_blocks_part = data_dict[input_data_group_array_key]
+			verbose_print("dict contains : " + str(data_blocks_part))
+			if type(data_blocks_part) != list:
+				assert False, "incorrect data organization : " + str(type(data_blocks_part))
+			if merge:
+				data_blocks += data_blocks_part
 			else:
-				assert False, "unknown organization for data : " + str(organized_input_data)
-		else:
-			assert False, "json input type must be array"
-	# B. CSV organized data
-	elif input_format.endswith("csv"):
-		#TODO
-		pass
-		return False
+				data_blocks.append(data_blocks_part)
+		except KeyError as err:
+			assert False, "incorrect key name, " + str(err)
+	verbose_print("data_blocks are : " + str(data_blocks))
+	return [data_blocks, data_keys]
+
+def get_array_dim(array):
+	if type(array) == list:
+		# array of arrays
+		try:
+			if type(array[0]) == list: #if type() == str does not True for unicode strings
+				#TODO : recursively
+				return 2
+			# array of objects
+			else:
+				return 1
+				#TODO : check data type for each item
+		except IndexError as err:
+			assert False, "array is empty : " + str(array)
 	else:
-		return False
+		assert False, "object is not an array but of type : " + str(type(array))
+
+def get_array_type(array):
+	try:
+		array_type = type(array[0])
+	except IndexError as err:
+		assert False, "array is empty"
+	for item in array:
+		if type(item) != array_type:
+			assert False, "array is not uniform : " + str(array)
+	return array_type
+					
+def load_data(data_array, input_format):
+	if input_format in ["url", "html", "inline_html"]:
+		array_dim = get_array_dim(data_array)
+		if array_dim == 1:
+			# verbose_print("loaded_data is : " + str(loaded_data))
+			loaded_data = [load_html_data(data_block, input_format) for data_block in data_array]
+		elif array_dim == 2:
+			# verbose_print("loaded " + str(len(loaded_data)) + " data blocks")
+			loaded_data = [ [load_html_data(data_block, input_format) for data_block in grouped_data_blocks] for grouped_data_blocks in data_array]
+		else:
+			assert False, "unsupported array dimension : " + str(array_dim)
+	else:
+		assert False, "unsupported data format : " + str(input_format)
+	return loaded_data
 
 def load_html_data(html_thing, input_format):
 	# URLs : load HTML from them
