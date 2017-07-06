@@ -83,37 +83,40 @@ def parse_arguments(available_commands, short_non_arg_options_dict, long_non_arg
 		# usage()
 		sys.exit(2)
 
-def get_input_data(input_type, command_line_args):
-	import sys, urllib
+def get_input_data(input_format, command_line_args):
+	import sys
 
-	# 0. Get input from stdin or command line arguments
+	# 0. Get input from stdin or command line arguments (input type = stdin or cli)
 	input_data = []
 	if len(command_line_args) == 0:
 		# get only last line to avoid log messages
 		input_data.append(get_last_line(sys.stdin))
 	else:
 		input_data = command_line_args
-	# 1. Load input from file if needed
-	if input_type == "raw":
+	# 1. Parse the input depending on format
+	# raw HTML strings : decode
+	if input_format == "raw":
+		input_data = map(decode_html, input_data)
+	# URLs : load HTML from them
+	elif input_format == "url":
+		map(load_url, input_data)
 		pass
-	elif input_type == "url":
-		#map(urllib.open(), input_data)
-		pass
-	elif input_type == "html":
+	# HTML local files : read HTML files
+	elif input_format == "html":
 		verbose_print("input data is html")
 		input_data = map(load_local_html, input_data)
-	elif input_type == "json":
+	# JSON : decode
+	elif input_format == "json":
 		input_data = map(decode_json(), input_data)
-	elif input_type == "csv":
-		#TODO : write to CSV file
+	# CSV : 
+	elif input_format == "csv":
+		#TODO : read CSV file
 		pass
 	return input_data
 
-def get_last_line(std_input):
-	import sys
-	
-	last_line = std_input.readline()
-	for line in std_input:
+def get_last_line(file):
+	last_line = file.readline()
+	for line in file:
 		print(line) # necessary has script can be piped with -v option set
 		last_line = line
 	return last_line
@@ -128,7 +131,6 @@ def decode_html(encoded_html):
 
 def decode_json(json_line):
 	import json
-	
 	try:
 		return json.loads(json_line)
 	except ValueError as value_error:
@@ -137,7 +139,6 @@ def decode_json(json_line):
 
 def load_local_html(html_filename):
 	import os
-
 	if os.path.exists(html_filename):
 		with open(html_filename, 'r') as html_file:
 			try:
@@ -147,3 +148,8 @@ def load_local_html(html_filename):
 	else:
 		# print "file does not exist"
 		return None
+
+def load_url(url_address):
+	import urllib2
+	response = urllib2.urlopen(url_address)
+	return response.read()
