@@ -10,7 +10,6 @@ def verbose_print(*args):
 	else:
 		pass	# do nothing
 
-
 def output_result(results, output_format):
 	import json
 	if output_format == "raw":
@@ -97,37 +96,103 @@ def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_a
 		# usage()
 		sys.exit(2)
 
-def get_input_data(input_format, command_line_args):
+def get_input_data(input_type, input_format, command_line_args):
 	import sys
 	# 0. Get input from stdin or command line arguments (input type = stdin or cli)
 	input_data = []
+	data_is_organized = False
 	if len(command_line_args) == 0:
 		# get only last line to avoid log messages
 		input_data.append(get_last_line(sys.stdin))
 	else:
 		input_data = command_line_args
-	# 1. Parse the input depending on format
-	# raw HTML strings : decode
-	if input_format == "raw":
-		input_data = map(decode_html, input_data)
-	# URLs : load HTML from them
-	elif input_format == "url":
-		map(load_url, input_data)
+	# 1. 
+	# inline string : load it straight
+	if  input_type == "inline":
+		input_data = [load_html_data(data, input_format) for data in input_data]
+	# JSON strings : decode
+	elif input_type == "inline_json":
+		if len(input_data) == 1:
+			input_data = decode_json(input_data[0])
+			data_is_array = not check_data_organization(input_data[0], input_format)
+			if data_is_array:
+				input_data = [load_html_data(data, input_format) for data in input_data]
+			else:
+				assert False, "JSON data is organized, not implemented yet : " + str(input_data)
+				data_is_organized = True
+		else:
+			assert False, "script accept only one JSON"	
+	# JSON filenames : read JSON files
+	elif input_type == "json":
+		# input_data = map(read_json(), input_data)
+		if len(input_data) == 1:
+			input_data = read_json(input_data[0])
+			data_is_array = not check_data_organization(input_data[0], input_format)
+			if data_is_array:
+				input_data = [load_html_data(data, input_format) for data in input_data]
+			else:
+				assert False, "JSON data is organized, not implemented yet : " + str(input_data)
+				data_is_organized = True
+		else:
+			assert False, "script accept only one JSON file, " + str(len(input_data)) + " provided"
+	# CSV strings
+	elif input_type == "inline_csv":
+		if len(input_data) == 1:
+			#TODO : decode
+			pass
+		else:
+			assert False, "script accept only one CSV"
+	# CSV filenames
+	elif input_type == "csv":
+		if len(input_data) == 1:
+			#TODO : read CSV file
+			pass
+		else:
+			assert False, "script accept only one CSV file"
+	else:
+		assert False, "unhandled input type : " + input_type
+	return input_data, data_is_organized
+
+def check_data_organization(organized_input_data, input_format):
+	# A. JSON organized data
+	if input_format.endswith("json"):
+		# Sanity check
+		if type(organized_input_data) == list:
+			# A.A JSON array, each item is either inline raw HTML, URL or HTML filename
+			if type(organized_input_data[0]) == str:
+				return False
+			# A.B. JSON array, each item is a dictionnary
+			elif type(organized_input_data[0]) == dict:
+				return True
+			# key1 = group name 
+			# key2 = array of items : raw HTML, URL or HTML filename
+			else:
+				assert False, "unknown organization for data : " + str(organized_input_data)
+		else:
+			assert False, "json input type must be array"
+	# B. CSV organized data
+	elif input_format.endswith("csv"):
+		#TODO
 		pass
+		return False
+	else:
+		return False
+
+def load_html_data(html_thing, input_format):
+	# URLs : load HTML from them
+	if input_format == "url":
+		html_data = load_url(html_thing)
+		pass
+	# raw encoded HTML strings : decode
+	elif input_format == "inline_html":
+		html_data = decode_html(html_thing)
 	# HTML local files : read HTML files
 	elif input_format == "html":
 		verbose_print("input data is html")
-		input_data = map(load_local_html, input_data)
-	# JSON : decode
-	elif input_format == "json":
-		input_data = map(decode_json(), input_data)
-	# CSV : 
-	elif input_format == "csv":
-		#TODO : read CSV file
-		pass
+		html_data = load_local_html(html_thing)
 	else:
 		assert False, "unhandled input format : " + input_format
-	return input_data
+	return html_data
 
 def get_last_line(file):
 	last_line = file.readline()
@@ -152,8 +217,18 @@ def decode_json(json_line):
 		sys.stderr.write("Error : could not decode JSON from line : " + json_line), value_error
 		sys.exit(2)
 
+def read_json(json_filename):
+	import json
+	try:
+		with open(json_filename) as json_file:
+			return json.load(json_file)	
+	except ValueError as value_error:
+		sys.stderr.write("Error : could not read JSON file : " + json_file), value_error
+		sys.exit(2)
+		
 def load_local_html(html_filename):
 	import os
+	verbose_print("loading html file : '" + html_filename + "'")
 	if os.path.exists(html_filename):
 		with open(html_filename, 'r') as html_file:
 			try:
@@ -161,8 +236,7 @@ def load_local_html(html_filename):
 			except EOFError:
 				sys.stderr.write("error while reading file '" + html_filename + "'")
 	else:
-		# print "file does not exist"
-		return None
+		assert False, "file : '" + html_filename + "' does not exist"
 
 def load_url(url_address):
 	import urllib2
