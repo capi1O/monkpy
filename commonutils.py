@@ -108,6 +108,12 @@ def is_string(object_type):
 	return object_type in [str, unicode]
 	# return isinstance(object, basestring): #if type() == str does not True for unicode strings
 
+def get_all_keys(dicts):
+	dict_keys = []
+	for dictionnary in dicts:
+		dict_keys += dictionnary.keys()
+	return list(set(dict_keys))
+	
 # Input/output functions
 
 def output_results(results, output_format):
@@ -120,8 +126,7 @@ def output_results(results, output_format):
 		with open("output.json", 'w+') as output_file:
 			json.dump(results, output_file)
 	elif output_format == "csv":
-		#TODO : write to CSV file
-		pass
+		write_dict_to_csv('output.csv', results)
 	else:
 		assert False, "unhandled output format : " + output_format
 
@@ -412,6 +417,19 @@ def read_csv(csv_filename):
 		assert False, "Error : could not read CSV file : " + csv_file + ", error : " + str(value_error)
 	except IOError as io_error:
 		assert False, "file : '" + csv_filename + "' does not exist"
+
+def write_dict_to_csv(csv_file, dict_data):
+	import csv
+	csv_columns = get_all_keys(dict_data)
+	try:
+		with open(csv_file, 'w') as csvfile:
+			writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+			writer.writeheader()
+			for data in dict_data:
+				writer.writerow(data)
+	except IOError as (errno, strerror):
+		print("I/O error({0}): {1}".format(errno, strerror))
+	return
 
 def load_local_html(html_filename):
 	import os
