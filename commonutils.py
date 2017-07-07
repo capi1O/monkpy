@@ -272,9 +272,29 @@ def get_input_data(input_type, input_format, command_line_args, input_data_group
 						assert False, "incorrect CSV data : " + str(csv_data)
 				# List of grouped data blocks 
 				elif columns_number == 2:
-					#TODO
-					#TODO : Check each data block, must be strings
-					pass
+					header_row = True
+					if header_row:
+						csv_data_group_name_key = csv_data_lines[0][0]
+						csv_data_group_array_key = csv_data_lines[0][1]
+						# Remove header row
+						csv_data_lines.pop(0)
+					# Get keys and values
+					group_keys = list(set(super_map(csv_data_lines, get_item, 0)))
+					if is_string(get_array_type(group_keys)):
+						pass #alright
+					# group data lines where key is same
+					csv_data_groups = []
+					for key in group_keys:
+						csv_data_group = []
+						for csv_data_line in csv_data_lines:
+							if csv_data_line[0] == key:
+								csv_data_group.append(csv_data_line[1])
+						csv_data_groups.append(csv_data_group)
+					if is_string(get_array_type(csv_data_groups)):
+						pass #alright
+					data_blocks = csv_data_groups
+					data_keys = group_keys
+					#TODO : Check each data block, must be strings	
 				else:
 					assert False, "unsupported organization for CSV data : " + str(csv_data_lines)
 			else:
@@ -312,8 +332,6 @@ def get_dict_data(data_dicts, input_data_group_name_key, input_data_group_array_
 def array_from_file(open_file):
 	lines = []
 	for line in open_file:
-		print "line :"
-		print line
 		lines.append(line)
 	return lines
 
