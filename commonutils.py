@@ -12,19 +12,40 @@ def verbose_print(*args):
 	else:
 		pass	# do nothing
 
-def get_array_dim(array):
-	array_dimension = 1
+def get_array_depth(array):
+	array_depth = 1
 	try:
 		while type(array[0]) == list and is_array_homogeneous(array):
-			array_dimension += 1
+			array_depth += 1
 			array = array[0]
 	except TypeError as err:
 		verbose_print("object is not an array but of type : " + str(type(array)))
-		array_dimension -= 1
+		array_depth -= 1
 	except IndexError as err:
 		verbose_print("array is empty : " + str(array))
-	return array_dimension
+	return array_depth
 
+def is_array_equal(array):
+	array = iter(array)
+	try:
+		first = next(array)
+	except StopIteration:
+		return True
+	return all(first == rest for rest in array)
+
+def get_array_width(array):
+	# check that all items are arrays
+	if get_array_depth(array) >= 2:
+		#get of number of elements for each item has same 
+		widths = map(len, array)
+		# check if all array elements are the same
+		if is_array_equal(widths):
+			return widths[0]
+		else:
+			assert False, "array is not rectangular : " + str(array)
+	else:
+		assert False, "array is not deep enough : " + str(array)
+	
 def is_array_homogeneous(array):
 	if type(array) != list:
 		assert False, "object is not an array but of type : " + str(type(array))
@@ -33,11 +54,12 @@ def is_array_homogeneous(array):
 	except IndexError as err:
 		# assert False, "array is empty : " + str(array)
 		verbose_print("array is empty : " + str(array))
+		return False
 	for item in array:
 		if type(item) != item_type :
 			return False
 	return True
-			
+
 def super_map(array, function, *args):
 	resulting_array = []
 	for item in array:
@@ -46,12 +68,12 @@ def super_map(array, function, *args):
 		resulting_array.append(result)
 	return resulting_array
 
-def super_submap(two_dim_array, function, *args):
-	resulting_two_dim_array = []
-	for array in two_dim_array:
+def super_submap(two_levels_array, function, *args):
+	resulting_two_levels_array = []
+	for array in two_levels_array:
 		resulting_array = super_map(array, function, *args)
-		resulting_two_dim_array.append(resulting_array)
-	return resulting_two_dim_array
+		resulting_two_levels_array.append(resulting_array)
+	return resulting_two_levels_array
 
 def get_item(iterable, index, default=None):
 	if iterable:
@@ -197,8 +219,8 @@ def get_input_data(input_type, input_format, command_line_args, input_data_group
 		input_data.append(get_last_line(sys.stdin))
 	else:
 		input_data = command_line_args
-	# 1. Arrange data in a 1 or 2 dim array
-	# dimension 1 = array of data blocks, dimension 2 = array of arrays of data blocks or array of dicts with arrays of data blocks)
+	# 1. Arrange data in a 1 or 2 deep array
+	# depth 1 = array of data blocks, depth 2 = array of arrays of data blocks or array of dicts with arrays of data blocks)
 	data_blocks = []
 	data_keys = []
 	# 1.A. Array items are data blocks
@@ -226,16 +248,35 @@ def get_input_data(input_type, input_format, command_line_args, input_data_group
 				# List of grouped data blocks (JSON array of dicts of data blocks)
 				elif array_type == dict:
 					data_blocks, data_keys = get_dict_data(json_data, input_data_group_name_key, input_data_group_array_key, False)
+					#TODO : Check each data block, must be strings
 				else:
 					assert False, "unknown organization for data : " + str(json_data[0])
 			# B. CSV data
 			elif input_type.endswith("csv"):
 				if input_type == "inline-csv":
-					#TODO
+					csv_data = decode_csv(input_data[0])
 				elif input_type == "csv":
-					#TODO
+					csv_data_lines = read_csv(input_data[0])
 				else:
 					assert False, "unknown csv format : " + input_type
+				# Check how data is organized
+				# check number of columns
+				columns_number = get_array_width(csv_data_lines)
+				# List of data blocks
+				if columns_number == 1:
+					csv_data = super_map(csv_data_lines, get_item, 0)
+					# check type
+					if is_string(get_array_type(csv_data)):
+						data_blocks = csv_data
+					else:
+						assert False, "incorrect CSV data : " + str(csv_data)
+				# List of grouped data blocks 
+				elif columns_number == 2:
+					#TODO
+					#TODO : Check each data block, must be strings
+					pass
+				else:
+					assert False, "unsupported organization for CSV data : " + str(csv_data_lines)
 			else:
 				assert False, "impossible"
 		else:
@@ -244,8 +285,6 @@ def get_input_data(input_type, input_format, command_line_args, input_data_group
 	else:
 		assert False, "unhandled input type : " + input_type
 
-	#TODO : Check each data block, must be strings
-	# if isinstance(data_blocks[0], basestring): #if type() == str does not True for unicode strings
 	
 	# 2. Load Data depending on type (only HTML supported)
 	loaded_data = load_data(data_blocks, input_format)
@@ -270,9 +309,17 @@ def get_dict_data(data_dicts, input_data_group_name_key, input_data_group_array_
 	verbose_print("data_blocks are : " + str(data_blocks))
 	return [data_blocks, data_keys]
 
-def get_last_line(file):
-	last_line = file.readline()
-	for line in file:
+def array_from_file(open_file):
+	lines = []
+	for line in open_file:
+		print "line :"
+		print line
+		lines.append(line)
+	return lines
+
+def get_last_line(open_file):
+	last_line = open_file.readline()
+	for line in open_file:
 		print(line) # necessary has script can be piped with -v option set
 		last_line = line
 	return last_line
@@ -281,15 +328,15 @@ def get_last_line(file):
 
 def load_data(data_array, input_format):
 	if input_format in ["url", "html-file", "raw-html"]:
-		array_dim = get_array_dim(data_array)
-		if array_dim == 1:
+		array_depth = get_array_depth(data_array)
+		if array_depth == 1:
 			# verbose_print("loaded_data is : " + str(loaded_data))
 			loaded_data = [load_html_data(data_block, input_format) for data_block in data_array]
-		elif array_dim == 2:
+		elif array_depth == 2:
 			# verbose_print("loaded " + str(len(loaded_data)) + " data blocks")
 			loaded_data = [ [load_html_data(data_block, input_format) for data_block in grouped_data_blocks] for grouped_data_blocks in data_array]
 		else:
-			assert False, "unsupported array dimension : " + str(array_dim)
+			assert False, "unsupported array dimension : " + str(array_depth)
 	else:
 		assert False, "unsupported data format : " + str(input_format)
 	return loaded_data
@@ -334,6 +381,19 @@ def read_json(json_filename):
 		assert False, "Error : could not read JSON file : " + json_file + ", error : " + str(value_error)
 	except IOError as io_error:
 		assert False, "file : '" + json_filename + "' does not exist"
+
+def decode_csv(csv_line):
+	return None
+
+def read_csv(csv_filename):
+	import csv
+	try:
+		with open(csv_filename) as csv_file:
+			return array_from_file(csv.reader(csv_file, delimiter=',', quotechar='"'))
+	except ValueError as value_error:
+		assert False, "Error : could not read CSV file : " + csv_file + ", error : " + str(value_error)
+	except IOError as io_error:
+		assert False, "file : '" + csv_filename + "' does not exist"
 
 def load_local_html(html_filename):
 	import os
