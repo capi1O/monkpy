@@ -76,6 +76,10 @@ def get_array_type(array):
 			assert False, "array is not uniform : " + str(array)
 	return array_type
 
+def is_string(object_type):
+	return object_type in [str, unicode]
+	# return isinstance(object, basestring): #if type() == str does not True for unicode strings
+
 # Input/output functions
 
 def output_results(results, output_format):
@@ -196,13 +200,13 @@ def get_input_data(input_type, input_format, command_line_args, input_data_group
 		data_blocks = input_data
 		verbose_print("input data is " + str(data_blocks))
 	# 1.B Array of arrays of data blocks or array of dicts with arrays of data blocks
-	elif input_type in ["inline_json", "json", "inline-csv", "csv"]:
+	elif input_type in ["inline-json", "json", "inline-csv", "csv"]:
 		if len(input_data) != 1:
 			assert False, "script accept only one file"
 		else:
 			# 1.B.A. JSON data
 			if input_type.endswith("json"):
-				if input_type == "inline_json":
+				if input_type == "inline-json":
 					json_data = decode_json(input_data[0])
 				elif input_type == "json":
 					json_data = read_json(input_data[0])
@@ -258,7 +262,7 @@ def get_last_line(file):
 # Data and file handling functions
 
 def load_data(data_array, input_format):
-	if input_format in ["url", "html", "inline_html"]:
+	if input_format in ["url", "html-file", "raw-html"]:
 		array_dim = get_array_dim(data_array)
 		if array_dim == 1:
 			# verbose_print("loaded_data is : " + str(loaded_data))
@@ -278,12 +282,12 @@ def load_html_data(html_thing, input_format):
 		html_data = load_url(html_thing)
 		pass
 	# raw encoded HTML strings : decode
-	elif input_format == "inline_html":
-		html_data = decode_html(html_thing)
-	# HTML local files : read HTML files
-	elif input_format == "html":
-		verbose_print("input data is html")
-		html_data = load_local_html(html_thing)
+	elif input_format == "raw-html":
+			html_data = decode_html(html_thing)
+		# HTML local files : read HTML files
+	elif input_format == "html-file":
+			verbose_print("input data is loaded from html file")
+			html_data = load_local_html(html_thing)
 	else:
 		assert False, "unhandled input format : " + input_format
 	return html_data
@@ -312,7 +316,9 @@ def read_json(json_filename):
 	except ValueError as value_error:
 		sys.stderr.write("Error : could not read JSON file : " + json_file), value_error
 		sys.exit(2)
-		
+	except IOError as io_error:
+		assert False, "file : '" + json_filename + "' does not exist"
+
 def load_local_html(html_filename):
 	import os
 	verbose_print("loading html file : '" + html_filename + "'")
