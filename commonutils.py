@@ -113,6 +113,19 @@ def get_all_keys(dicts):
 	for dictionnary in dicts:
 		dict_keys += dictionnary.keys()
 	return list(set(dict_keys))
+
+def flatten_dicts(group_dicts, group_name_key, group_dicts_key):
+	flattened_dicts = []
+	for group_dict in group_dicts:
+		group_name = group_dict[group_name_key]
+		dicts = group_dict[group_dicts_key]
+		for dictionnary in dicts:
+			dictionnary[group_name_key] = group_name
+			flattened_dicts.append(dictionnary)
+	return flattened_dicts
+
+def utf8_dict(dictionnary):
+	return { k:v.encode('utf8') for k,v in dictionnary.items() }
 	
 # Input/output functions
 
@@ -126,22 +139,25 @@ def output_results(results, output_format):
 		with open("output.json", 'w+') as output_file:
 			json.dump(results, output_file)
 	elif output_format == "csv":
-		write_dict_to_csv('output.csv', results)
+		write_dicts_to_csv('output.csv', results)
 	else:
 		assert False, "unhandled output format : " + output_format
 
-def output_grouped_results(group_keys, grouped_results, output_format, group_name_key, group_array_key):
+def output_grouped_results(group_names, group_results_dicts, output_format, group_name_key, group_results_dicts_key):
 	# check
-	if len(group_keys) != len(grouped_results):
-		assert False, "mismatch number for grouped output : "  + str(len(grouped_results)) + " group results for " + str(len(group_keys)) + " keys"
+	if len(group_names) != len(group_results_dicts):
+		assert False, "mismatch number for grouped output : "  + str(len(group_results_dicts)) + " group results for " + str(len(group_names)) + " keys"
 	# make dict
 	result_dicts = []
-	for index, results in enumerate(grouped_results):
+	for index, results in enumerate(group_results_dicts):
 		result_dict = { 
-			group_name_key : group_keys[index],
-			group_array_key : results
+			group_name_key : group_names[index],
+			group_results_dicts_key : results
 		}
 		result_dicts.append(result_dict)
+	# flatter dict for CSV output
+	if output_format.endswith("csv"):
+		result_dicts = flatten_dicts(result_dicts, group_name_key, group_results_dicts_key)
 	output_results(result_dicts, output_format)
 
 def parse_arguments(available_commands, acceptable_non_arg_options, acceptable_arg_options):
@@ -418,15 +434,15 @@ def read_csv(csv_filename):
 	except IOError as io_error:
 		assert False, "file : '" + csv_filename + "' does not exist"
 
-def write_dict_to_csv(csv_file, dict_data):
+def write_dicts_to_csv(csv_file, dicts):
 	import csv
-	csv_columns = get_all_keys(dict_data)
+	csv_columns = get_all_keys(dicts)
 	try:
 		with open(csv_file, 'w') as csvfile:
 			writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
 			writer.writeheader()
-			for data in dict_data:
-				writer.writerow(data)
+			for dictionnary in dicts:
+				writer.writerow(utf8_dict(dictionnary))
 	except IOError as (errno, strerror):
 		print("I/O error({0}): {1}".format(errno, strerror))
 	return
