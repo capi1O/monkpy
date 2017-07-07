@@ -125,7 +125,7 @@ def output_results(results, output_format):
 	else:
 		assert False, "unhandled output format : " + output_format
 
-def output_grouped_results(group_keys, grouped_results, output_format):
+def output_grouped_results(group_keys, grouped_results, output_format, group_name_key, group_array_key):
 	# check
 	if len(group_keys) != len(grouped_results):
 		assert False, "mismatch number for grouped output : "  + str(len(grouped_results)) + " group results for " + str(len(group_keys)) + " keys"
@@ -133,8 +133,8 @@ def output_grouped_results(group_keys, grouped_results, output_format):
 	result_dicts = []
 	for index, results in enumerate(grouped_results):
 		result_dict = { 
-			"key" : group_keys[index],
-			"results" : results
+			group_name_key : group_keys[index],
+			group_array_key : results
 		}
 		result_dicts.append(result_dict)
 	output_results(result_dicts, output_format)
