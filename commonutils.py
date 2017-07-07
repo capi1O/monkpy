@@ -201,16 +201,16 @@ def get_input_data(input_type, input_format, command_line_args, input_data_group
 	# dimension 1 = array of data blocks, dimension 2 = array of arrays of data blocks or array of dicts with arrays of data blocks)
 	data_blocks = []
 	data_keys = []
-	# 1.A. Array of data blocks
+	# 1.A. Array items are data blocks
 	if input_type in ["inline"]:
 		data_blocks = input_data
 		verbose_print("input data is " + str(data_blocks))
-	# 1.B Array of arrays of data blocks or array of dicts with arrays of data blocks
+	# 1.B Array item are groups of data blocks (organized in array or dicts)
 	elif input_type in ["inline-json", "json", "inline-csv", "csv"]:
-		if len(input_data) != 1:
-			assert False, "script accept only one file"
-		else:
-			# 1.B.A. JSON data
+		if len(input_data) == 0:
+			assert False, "no input"
+		elif len(input_data) == 1:
+			# A. JSON data
 			if input_type.endswith("json"):
 				if input_type == "inline-json":
 					json_data = decode_json(input_data[0])
@@ -218,23 +218,35 @@ def get_input_data(input_type, input_format, command_line_args, input_data_group
 					json_data = read_json(input_data[0])
 				else:
 					assert False, "unknown json format : " + input_type
-				if type(json_data) == list:
-					# 1.B.A.A JSON array of data blocks
-					if isinstance(json_data[0], basestring): #if type() == str does not True for unicode strings
-						data_blocks = json_data
-					# 1.B.A.B. JSON array of dicts of data blocks
-					elif type(json_data[0]) == dict:
-						data_blocks, data_keys = get_dict_data(json_data, input_data_group_name_key, input_data_group_array_key, False)
-					else:
-						assert False, "unknown organization for data : " + str(json_data[0])
+				# Check how data is organized
+				array_type = get_array_type(json_data)
+				# List of data blocks (in JSON array)
+				if is_string(array_type):
+					data_blocks = json_data
+				# List of grouped data blocks (JSON array of dicts of data blocks)
+				elif array_type == dict:
+					data_blocks, data_keys = get_dict_data(json_data, input_data_group_name_key, input_data_group_array_key, False)
 				else:
-					assert False, "JSON input type must be array, " + str(json_data)
+					assert False, "unknown organization for data : " + str(json_data[0])
 			# B. CSV data
-			elif input_format.endswith("csv"):
-				#TODO
-				pass
+			elif input_type.endswith("csv"):
+				if input_type == "inline-csv":
+					#TODO
+				elif input_type == "csv":
+					#TODO
+				else:
+					assert False, "unknown csv format : " + input_type
+			else:
+				assert False, "impossible"
+		else:
+			assert False, "too many groups of data blocks provided"
+			#TODO : handle multiple files
 	else:
 		assert False, "unhandled input type : " + input_type
+
+	#TODO : Check each data block, must be strings
+	# if isinstance(data_blocks[0], basestring): #if type() == str does not True for unicode strings
+	
 	# 2. Load Data depending on type (only HTML supported)
 	loaded_data = load_data(data_blocks, input_format)
 	return [loaded_data, data_keys]
@@ -311,8 +323,7 @@ def decode_json(json_line):
 	try:
 		return json.loads(json_line)
 	except ValueError as value_error:
-		sys.stderr.write("Error : could not decode JSON from line : " + json_line), value_error
-		sys.exit(2)
+		assert False, "Error : could not decode JSON from line : " + json_line + ", error : " + str(value_error)
 
 def read_json(json_filename):
 	import json
@@ -320,8 +331,7 @@ def read_json(json_filename):
 		with open(json_filename) as json_file:
 			return json.load(json_file)	
 	except ValueError as value_error:
-		sys.stderr.write("Error : could not read JSON file : " + json_file), value_error
-		sys.exit(2)
+		assert False, "Error : could not read JSON file : " + json_file + ", error : " + str(value_error)
 	except IOError as io_error:
 		assert False, "file : '" + json_filename + "' does not exist"
 
