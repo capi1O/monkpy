@@ -13,21 +13,31 @@ def verbose_print(*args):
 		pass	# do nothing
 
 def get_array_dim(array):
-	if type(array) == list:
-		# array of arrays
-		try:
-			if type(array[0]) == list: #if type() == str does not True for unicode strings
-				#TODO : recursively
-				return 2
-			# array of objects
-			else:
-				return 1
-				#TODO : check data type for each item
-		except IndexError as err:
-			assert False, "array is empty : " + str(array)
-	else:
-		assert False, "object is not an array but of type : " + str(type(array))
+	array_dimension = 1
+	try:
+		while type(array[0]) == list and is_array_homogeneous(array):
+			array_dimension += 1
+			array = array[0]
+	except TypeError as err:
+		verbose_print("object is not an array but of type : " + str(type(array)))
+		array_dimension -= 1
+	except IndexError as err:
+		verbose_print("array is empty : " + str(array))
+	return array_dimension
 
+def is_array_homogeneous(array):
+	if type(array) != list:
+		assert False, "object is not an array but of type : " + str(type(array))
+	try:
+		item_type = type(array[0])
+	except IndexError as err:
+		# assert False, "array is empty : " + str(array)
+		verbose_print("array is empty : " + str(array))
+	for item in array:
+		if type(item) != item_type :
+			return False
+	return True
+			
 def super_map(array, function, *args):
 	resulting_array = []
 	for item in array:
@@ -67,14 +77,10 @@ def prepend_string(input_string, string2):
 	return string2 + input_string
 
 def get_array_type(array):
-	try:
-		array_type = type(array[0])
-	except IndexError as err:
-		assert False, "array is empty"
-	for item in array:
-		if type(item) != array_type:
-			assert False, "array is not uniform : " + str(array)
-	return array_type
+	if is_array_homogeneous(array):
+		return type(array[0])
+	else:
+		assert False, "array is not homogeneous : " + str(array)
 
 def is_string(object_type):
 	return object_type in [str, unicode]
